@@ -1132,6 +1132,21 @@ class QNetworkxWidget(QGraphicsView):
 
     def contextMenuEvent(self, event):
         # self._logger.debug("ContextMenuEvent received on graph")
+
+        # if the user has right clicked on an item other than the background, this code
+        # will pop up the correct context menu and return
+        object = self.itemAt(event.pos())
+
+        if isinstance(object, QGraphicsTextItem):
+            textValue = str(object.toPlainText())
+            node = self.get_node(textValue)['item']
+            node.menu.exec_(event.globalPos())
+            return
+        elif isinstance(object, QNodeGraphicItem):
+            object.menu.exec_(event.globalPos())
+            return
+
+        # if the user has right clicked in the background, this will pop up the general context menu
         if self.menu:
             self.menu.exec_(event.globalPos())
             event.setAccepted(True)
