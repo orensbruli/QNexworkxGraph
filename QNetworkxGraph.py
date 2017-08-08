@@ -30,14 +30,16 @@ import math
 from random import uniform
 
 import networkx as nx
-from PyQt4.QtCore import QString, QPointF, Qt, QRectF, qsrand, QTime, QLineF, QSizeF, qAbs, pyqtSignal
-from PyQt4.QtGui import QMainWindow, QWidget, QVBoxLayout, QSlider, QGraphicsView, QPen, QBrush, QHBoxLayout, \
-    QCheckBox, QFont, QFontMetrics, QComboBox, QGraphicsTextItem, QMenu, QAction, QPainterPath, QPainterPathStroker, \
-    QTransform, QGraphicsItem, QApplication, QLinearGradient, QPolygonF, QRadialGradient, QStyle, QColor, \
-    QGraphicsScene, QPainter
-from scipy.interpolate import interp1d
-from particles_decor import ParticlesBackgroundDecoration
+import networkx.drawing.layout as ly
+from PyQt4.QtCore import QLineF, QPointF, QRectF, QSizeF, QString, QTime, Qt, pyqtSignal, qAbs, qsrand
+from PyQt4.QtGui import QAction, QApplication, QBrush, QCheckBox, QColor, QComboBox, QFont, QFontMetrics, QGraphicsItem, \
+    QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLinearGradient, QMainWindow, QMenu, QPainter, \
+    QPainterPath, QPainterPathStroker, QPen, QPolygonF, QRadialGradient, QSlider, QStyle, QTransform, QVBoxLayout, \
+    QWidget
 from enum import Enum
+from scipy.interpolate import interp1d
+
+from ParticlesBackgroundDecoration import ParticlesBackgroundDecoration
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -93,7 +95,7 @@ class QEdgeGraphicItem(QGraphicsItem):
         self.source.add_edge(self)
         self.dest.add_edge(self)
         self.adjust()
-        self.menu = None
+        self.menu = QMenu()
         self.is_directed = directed
         self.setZValue(11)
         self.set_label_visible(label_visible)
@@ -232,7 +234,6 @@ class QEdgeGraphicItem(QGraphicsItem):
             The values of the dict are tuples like (object, method).
         """
         self._logger.debug("Adding custom context menu to edge %s" % str(self.label.toPlainText()))
-        self.menu = QMenu()
         for option_string, callback in options.items():
             instance, method = callback
             action = QAction(option_string, self.menu)
@@ -812,6 +813,31 @@ class QNetworkxWidget(QGraphicsView):
         self._scale_factor = 1.15
         self.set_panning_mode(False)
 
+        self.setDragMode(QGraphicsView.RubberBandDrag)
+
+        self.menu = QMenu()
+        action1 = QAction("Panning mode", self)
+        action1.triggered.connect(self.set_panning_mode)
+        action1.setCheckable(True)
+        self.menu.addAction(action1)
+        self.menu.addSeparator()
+
+    def contextMenuEvent(self, event):
+        self._logger.debug("ContextMenuEvent received on node %s" % str(self.label.toPlainText()))
+        selection_path = QPainterPath()
+        selection_path.addPolygon(self.mapToScene(self.boundingRect()))
+        if event.modifiers() & Qt.CTRL:
+            selection_path += self.scene().selectionArea()
+        else:
+            self.scene().clearSelection()
+        self.scene().setSelectionArea(selection_path)
+        if self.menu:
+            self.menu.exec_(event.screenPos())
+            event.setAccepted(True)
+        else:
+            self._logger.warning("No QNodeGraphicItem defined yet. Use add_context_menu.")
+
+
     #     self.zoom_in_action = QAction("Zoom in", self)
     #     self.zoom_in_action.setShortcut("Ctrl++")
     #     self.zoom_in_action.triggered.connect(self.zoom_in_one_step)
@@ -848,11 +874,12 @@ class QNetworkxWidget(QGraphicsView):
     def set_panning_mode(self, mode=False):
         self.panning_mode = mode
         if self.panning_mode:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        else:
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        else:
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
 
     def get_current_nodes_positions(self):
         position_dict = {}
@@ -1091,7 +1118,7 @@ class QNetworkxWidget(QGraphicsView):
                 instance, method = callback
                 action1 = QAction(option_string, self)
                 action1.triggered.connect(getattr(instance, method))
-                self.addAction(action1)
+                self.menu.addAction(action1)
 
     def delete_graph(self):
         for label, data in self.nx_graph.nodes(data=True):
@@ -1102,6 +1129,14 @@ class QNetworkxWidget(QGraphicsView):
 
     def clear(self):
         self.delete_graph()
+
+    def contextMenuEvent(self, event):
+        # self._logger.debug("ContextMenuEvent received on graph")
+        if self.menu:
+            self.menu.exec_(event.globalPos())
+            event.setAccepted(True)
+        else:
+            self._logger.warning("No menu defined yet for QNetworkxWidget. Use add_context_menu.")
 
     def set_nodes_shape(self, shape):
         for label, data in self.nx_graph.nodes(data=True):
@@ -1237,7 +1272,6 @@ class QNetworkxWindowExample(QMainWindow):
         self.slider.setValue(current_width)
 
         self.layouts_combo = QComboBox()
-        import networkx.drawing.layout as ly
         for layout_method in dir(ly):
             if "_layout" in layout_method and callable(getattr(ly, layout_method)) and layout_method[0] != '_':
                 self.layouts_combo.addItem(layout_method)
@@ -1263,10 +1297,9 @@ class QNetworkxWindowExample(QMainWindow):
 
     def on_change_layout(self, index):
         item = self.layouts_combo.itemText(index)
-        import networkx.drawing.layout as ly
         layout_method = getattr(ly, str(item))
         pos = layout_method(self.graph_model)
-        pos = self.network_controller.networkx_positions_to_pixels(pos)
+        pos = self.network_controller.graph_widget.networkx_positions_to_pixels(pos)
         self.graph_widget.set_node_positions(pos)
 
 
