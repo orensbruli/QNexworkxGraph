@@ -881,20 +881,19 @@ class QNetworkxWidget(QGraphicsView):
             for node_label in self.selected_nodes():
                 self.nx_graph.node[node_label]['item'].set_mass_center(self.last_menu_position)
 
-    def center_on(self, position):
-        temp = self.panning_mode
+    def center_on(self, position, node):
+        pass 
+        # print "Item position"
+        # temp = self.panning_mode
+        # self.set_panning_mode(True)
 
-        print position
-        print [self.scene.width(), self.scene.height()]
+        # nodeGraphicItem = self.get_node(node)['item']
+        # position = QPointF(nodeGraphicItem.pos().x(), nodeGraphicItem.pos().y())
+        
+        # self.horizontalScrollBar().setValue(position.x()) 
+        # self.verticalScrollBar().setValue(position.y())
 
-        position[0]-= self.scene.width()/2
-        position[1]-= self.scene.height()/2
-
-        self.set_panning_mode(True)
-        self.horizontalScrollBar().setValue(position[0]) 
-        self.verticalScrollBar().setValue(position[1])
-
-        self.set_panning_mode(temp)
+        # self.set_panning_mode(temp)
 
     def create_new_node_group(self, node_group_name=None):
         if not node_group_name:
@@ -1100,6 +1099,11 @@ class QNetworkxWidget(QGraphicsView):
             super(QNetworkxWidget, self).keyPressEvent(event)
 
     def mousePressEvent(self, event):
+        # print "View", event.x(), event.y()
+        # print "Scene", self.mapToScene(event.x(), event.y())
+        # print "Scroll bar position", self.horizontalScrollBar().value()
+        # print 
+
         if self.panning_mode:
             if event.button() == Qt.MidButton or (event.buttons() & Qt.RightButton and event.buttons() & Qt.LeftButton):
                 self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -1160,8 +1164,20 @@ class QNetworkxWidget(QGraphicsView):
             rect.setTop(rect.top() - initial_height)
             rect.setBottom(rect.bottom() + initial_height)
             self.scene.setSceneRect(rect)
+
+            sceneRect = self.scene.sceneRect()
+            topLeft = sceneRect.topLeft()
+            bottomRight = sceneRect.bottomRight()
+
+            self.horizontalScrollBar().setMinimum(topLeft.x())
+            self.horizontalScrollBar().setMaximum(bottomRight.x())
+
+            self.verticalScrollBar().setMinimum(topLeft.y())
+            self.verticalScrollBar().setMaximum(bottomRight.y())
         else:
             self.scene.setSceneRect(self.mapToScene(self.viewport().geometry()).boundingRect())
+
+        # print "Current", self.scene.sceneRect()
 
     def drawBackground(self, painter, rect):
         # Shadow.
@@ -1186,8 +1202,7 @@ class QNetworkxWidget(QGraphicsView):
             painter.fillRect(rect.intersected(scene_rect), QBrush(self.background_color))
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(scene_rect)
-        self.scene.addEllipse(-10, -10, 20, 20,
-                              QPen(Qt.white), QBrush(Qt.SolidPattern))
+        # self.scene.addEllipse(-20, -20, 40, 40, QPen(Qt.white), QBrush(Qt.SolidPattern))
 
     def set_node_size(self, size):
         for label, data in self.nx_graph.nodes(data=True):
